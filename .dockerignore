@@ -1,0 +1,9 @@
+# Ignore the following files and directories
+.git
+.gitignore
+*.md
+*.log
+*.iml
+target/
+build/
+*.java
