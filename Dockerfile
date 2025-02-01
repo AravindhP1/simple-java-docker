@@ -1,19 +1,23 @@
-# stable official Java runtime base image
-FROM openjdk:17-jdk-alpine
+# Build stage
+FROM maven:3.8.6-openjdk-17-slim AS builder
 
-# metadata
-LABEL maintainer="your-email@example.com"
-LABEL version="1.0"
-LABEL description="A simple Java application"
-
-# working directory
 WORKDIR /app
 
-# Copy source code into the container
-COPY src/Main.java /app/Main.java
+# Copy pom.xml and dependencies first (to leverage Docker cache)
+COPY pom.xml /app/pom.xml
+RUN mvn dependency:go-offline
 
-# Compile the Java code
-RUN javac Main.java
+# Copy source and build the application
+COPY src /app/src
+RUN mvn clean package
 
-# Run the Java application when the container starts
-CMD ["java", "Main"]
+# Run stage
+FROM openjdk:17-jdk-alpine
+
+WORKDIR /app
+
+# Copy the jar from the build stage
+COPY --from=builder /app/target/my-java-app.jar /app/my-java-app.jar
+
+# Run the Java application
+CMD ["java", "-jar", "my-java-app.jar"]
