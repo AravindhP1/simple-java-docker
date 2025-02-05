@@ -61,7 +61,7 @@ resource "aws_security_group" "eks_sg" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Restrict this to trusted IPs if possible
+    cidr_blocks = ["0.0.0.0/0"]  # Restrict to trusted IPs if needed
   }
 
   ingress {
@@ -88,7 +88,7 @@ resource "aws_security_group" "eks_sg" {
 resource "aws_security_group" "eks_node_sg" {
   vpc_id = aws_vpc.eks_vpc.id
 
-  # Allow all worker nodes to communicate with each other
+  # Allow worker nodes to communicate with each other
   ingress {
     description      = "Allow all traffic between worker nodes"
     from_port        = 0
@@ -106,7 +106,7 @@ resource "aws_security_group" "eks_node_sg" {
     security_groups  = [aws_security_group.eks_sg.id]
   }
 
-  # Allow all outbound traffic (default AWS behavior)
+  # Allow all outbound traffic
   egress {
     from_port   = 0
     to_port     = 0
@@ -150,8 +150,6 @@ resource "aws_eks_cluster" "eks" {
   vpc_config {
     subnet_ids = aws_subnet.eks_subnets[*].id
   }
-
-  depends_on = [aws_iam_role_policy_attachment.eks_cluster_policy]
 }
 
 # IAM Role for Worker Nodes
@@ -188,7 +186,7 @@ resource "aws_iam_role_policy_attachment" "ecr_readonly" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# Worker Node Group with Node Security Group
+# Worker Node Group without explicit NIC dependency
 resource "aws_eks_node_group" "eks_nodes" {
   cluster_name    = aws_eks_cluster.eks.name
   node_group_name = "worker-nodes"
@@ -205,10 +203,4 @@ resource "aws_eks_node_group" "eks_nodes" {
     max_size     = var.max_capacity
     min_size     = var.min_capacity
   }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.eks_worker_node_policy,
-    aws_iam_role_policy_attachment.eks_cni_policy,
-    aws_iam_role_policy_attachment.ecr_readonly
-  ]
 }
