@@ -30,7 +30,7 @@ resource "aws_route_table" "eks_route_table" {
   }
 }
 
-# Create Subnets (Dynamically Assigned AZs)
+# Create Subnets
 resource "aws_subnet" "eks_subnets" {
   count = length(var.subnet_cidrs)
 
@@ -81,6 +81,41 @@ resource "aws_security_group" "eks_sg" {
 
   tags = {
     Name = "eks-sg"
+  }
+}
+
+# Security Group for Worker Nodes
+resource "aws_security_group" "eks_node_sg" {
+  vpc_id = aws_vpc.eks_vpc.id
+
+  # Allow all worker nodes to communicate with each other
+  ingress {
+    description      = "Allow all traffic between worker nodes"
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    security_groups  = [aws_security_group.eks_node_sg.id]  # Self-referencing SG
+  }
+
+  # Allow traffic from EKS control plane to worker nodes
+  ingress {
+    description      = "Allow EKS API access to nodes"
+    from_port        = 443
+    to_port          = 443
+    protocol         = "tcp"
+    security_groups  = [aws_security_group.eks_sg.id]
+  }
+
+  # Allow all outbound traffic (default AWS behavior)
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "eks-node-sg"
   }
 }
 
@@ -153,12 +188,17 @@ resource "aws_iam_role_policy_attachment" "ecr_readonly" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# Worker Node Group
+# Worker Node Group with Node Security Group
 resource "aws_eks_node_group" "eks_nodes" {
   cluster_name    = aws_eks_cluster.eks.name
   node_group_name = "worker-nodes"
   node_role_arn   = aws_iam_role.eks_node_role.arn
   subnet_ids      = aws_subnet.eks_subnets[*].id
+
+  # Attach the Node Security Group
+  vpc_config {
+    security_group_ids = [aws_security_group.eks_node_sg.id]
+  }
 
   scaling_config {
     desired_size = var.desired_capacity
