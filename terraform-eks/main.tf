@@ -186,21 +186,26 @@ resource "aws_iam_role_policy_attachment" "ecr_readonly" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
-# Worker Node Group without explicit NIC dependency
+# Worker Node Group (FIXED)
 resource "aws_eks_node_group" "eks_nodes" {
   cluster_name    = aws_eks_cluster.eks.name
   node_group_name = "worker-nodes"
   node_role_arn   = aws_iam_role.eks_node_role.arn
   subnet_ids      = aws_subnet.eks_subnets[*].id
 
-  # Attach the Node Security Group
-  vpc_config {
-    security_group_ids = [aws_security_group.eks_node_sg.id]
-  }
-
   scaling_config {
     desired_size = var.desired_capacity
     max_size     = var.max_capacity
     min_size     = var.min_capacity
+  }
+
+  # Optional: Allow SSH access to worker nodes (if required)
+  remote_access {
+    ec2_ssh_key               = var.ssh_key_name
+    source_security_group_ids = [aws_security_group.eks_node_sg.id]
+  }
+
+  tags = {
+    Name = "eks-worker-nodes"
   }
 }
