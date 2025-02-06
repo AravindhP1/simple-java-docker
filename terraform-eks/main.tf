@@ -61,7 +61,7 @@ resource "aws_security_group" "eks_sg" {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]  # Restrict to trusted IPs if needed
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
@@ -84,39 +84,45 @@ resource "aws_security_group" "eks_sg" {
   }
 }
 
-# Security Group for Worker Nodes
+# Security Group for Worker Nodes (FIXED SELF-REFERENCE)
 resource "aws_security_group" "eks_node_sg" {
   vpc_id = aws_vpc.eks_vpc.id
-
-  # Allow worker nodes to communicate with each other
-  ingress {
-    description      = "Allow all traffic between worker nodes"
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    security_groups  = [aws_security_group.eks_node_sg.id]  # Self-referencing SG
-  }
-
-  # Allow traffic from EKS control plane to worker nodes
-  ingress {
-    description      = "Allow EKS API access to nodes"
-    from_port        = 443
-    to_port          = 443
-    protocol         = "tcp"
-    security_groups  = [aws_security_group.eks_sg.id]
-  }
-
-  # Allow all outbound traffic
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
   tags = {
     Name = "eks-node-sg"
   }
+}
+
+# Allow worker nodes to communicate with each other (Self-Ingress Rule)
+resource "aws_security_group_rule" "eks_node_self_ingress" {
+  type                     = "ingress"
+  from_port                = 0
+  to_port                  = 0
+  protocol                 = "-1"
+  security_group_id        = aws_security_group.eks_node_sg.id
+  source_security_group_id = aws_security_group.eks_node_sg.id
+  description              = "Allow all traffic between worker nodes"
+}
+
+# Allow traffic from EKS control plane to worker nodes
+resource "aws_security_group_rule" "eks_control_plane_to_nodes" {
+  type                     = "ingress"
+  from_port                = 443
+  to_port                  = 443
+  protocol                 = "tcp"
+  security_group_id        = aws_security_group.eks_node_sg.id
+  source_security_group_id = aws_security_group.eks_sg.id
+  description              = "Allow EKS API access to nodes"
+}
+
+# Allow all outbound traffic from worker nodes
+resource "aws_security_group_rule" "eks_node_egress" {
+  type        = "egress"
+  from_port   = 0
+  to_port     = 0
+  protocol    = "-1"
+  cidr_blocks = ["0.0.0.0/0"]
+  security_group_id = aws_security_group.eks_node_sg.id
 }
 
 # IAM Role for EKS Cluster
@@ -199,7 +205,7 @@ resource "aws_eks_node_group" "eks_nodes" {
     min_size     = var.min_capacity
   }
 
-  # Optional: Allow SSH access to worker nodes (if required)
+  # Allow SSH access to worker nodes
   remote_access {
     ec2_ssh_key               = var.ssh_key_name
     source_security_group_ids = [aws_security_group.eks_node_sg.id]
