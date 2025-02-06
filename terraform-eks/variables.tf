@@ -41,3 +41,10 @@ variable "availability_zones" {
   type        = list(string)
   default     = ["us-east-1a", "us-east-1b"]  # Ensure these exist in your AWS region
 }
+
+variable "ssh_key_name" {
+  description = "The name of the SSH key pair for worker nodes"
+  type        = string
+  default     = "UBUNTUPAIR.pem"  # Set this to your SSH key name or override it via Terraform CLI
+}
+
